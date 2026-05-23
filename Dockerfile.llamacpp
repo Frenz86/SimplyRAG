@@ -1,0 +1,29 @@
+# Build del fork PrismML di llama.cpp con i kernel 1-bit Q1_0.
+# Compilato CPU-only: niente CUDA, niente VRAM richiesta.
+FROM ubuntu:24.04 AS build
+
+RUN apt-get update && apt-get install -y \
+        build-essential cmake git libcurl4-openssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+# Fork ufficiale PrismML: include i kernel per il formato Q1_0_g128
+RUN git clone --depth 1 https://github.com/PrismML-Eng/llama.cpp
+
+WORKDIR /opt/llama.cpp
+# GGML_CUDA=OFF -> build per sola CPU
+RUN cmake -B build -DGGML_CUDA=OFF -DLLAMA_CURL=ON \
+    && cmake --build build -j2 --target llama-server
+
+# --- Immagine finale, leggera ---
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y \
+        libcurl4-openssl-dev libgomp1 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /opt/llama.cpp/build/bin/ /usr/local/bin/
+RUN ldconfig /usr/local/bin
+
+WORKDIR /models
+EXPOSE 8080
+ENTRYPOINT ["llama-server"]
