@@ -9,11 +9,3 @@ docker exec -it postgres psql -U owui -d openwebui -c "CREATE EXTENSION IF NOT E
 
 
 #############################################################
-Su una macchina con 16 GB stai larghi. Su 8 GB scrocchia, ma può funzionare se non carichi 30 PDF in parallelo.
-Avvertenze specifiche di questo setup
-
-Prefissi e5: non saltarli. Senza query:  e passage:  la qualità del retrieval di e5-large crolla del 15-20%. Se per errore hai già caricato documenti senza prefisso, vai in Admin → Settings → Documents e clicca "Reindex" sulla knowledge base dopo aver corretto le env var.
-OpenRouter privacy: usando GPT-5.4 via OpenRouter, i chunk recuperati dai tuoi documenti vanno a OpenAI tramite OpenRouter. Per documenti coperti da segreto professionale o GDPR sensibili, questa è una scelta da fare a occhi aperti. OpenRouter ha una policy in cui ogni provider dichiara se logga o no i prompt, ma sulla pipeline OpenAI standard i prompt vengono trasmessi al provider per l'inferenza. Per i casi delicati, tieni un modello locale alternativo (Ollama + Qwen 2.5 14B, ad esempio). OpenRouter
-Costo GPT-5.4 base: circa $3/M input e $15/M output token (verifica sempre su OpenRouter perché variano). Con context grande di 1M token può salire in fretta — imposta limiti di spesa sul tuo account OpenRouter.
-Reranker su CPU: con TOP_K=12 aggiunge 1-3 secondi a ogni query. Se ti dà fastidio, abbassi a TOP_K=8.
-bge-reranker-v2-m3 vs e5: pur essendo due famiglie diverse (BAAI vs Microsoft), si sposano benissimo perché entrambi multilingue e addestrati su corpora simili. È una combinazione collaudata.
