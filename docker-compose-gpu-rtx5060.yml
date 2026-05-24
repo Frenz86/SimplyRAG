@@ -1,4 +1,6 @@
 # Compose per RTX 5060-ti16GB - 32GB RAM
+# HF_REPO=ik-llama/Qwen3.6-35B-A3B-MTP-UD-GGUF
+# HF_MODEL=Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -13,7 +15,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U owui -d openwebui"]
       interval: 10s
+      timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - backend
     logging:
@@ -39,7 +43,7 @@ services:
       start_period: 10s
     depends_on:
       open-webui:
-        condition: service_started
+        condition: service_healthy
       pgadmin:
         condition: service_started
     networks:
@@ -58,7 +62,7 @@ services:
       postgres:
         condition: service_healthy
       llama-cpp:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: 30s
@@ -91,7 +95,7 @@ services:
       ENABLE_OLLAMA_API: "false"
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?genera una chiave random lunga}
       WEBUI_AUTH: "true"
-      ENABLE_PERSISTENT_CONFIG: "False"
+      ENABLE_PERSISTENT_CONFIG: "True"
       BYPASS_MODEL_ACCESS_CONTROL: "True"
       HF_TOKEN: ${HF_TOKEN:-}
       DEFAULT_RAG_TEMPLATE: |
@@ -129,13 +133,18 @@ services:
     networks:
       - frontend
       - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   model-downloader:
     image: python:3.11-slim
     container_name: model-downloader
     restart: "no"
     volumes:
-      - /root/models:/root/models
+      - models:/root/models
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
       HF_HUB_ENABLE_HF_TRANSFER: "1"
@@ -179,7 +188,7 @@ services:
               count: all
               capabilities: [gpu]
     volumes:
-      - /root/models:/root/models:ro
+      - models:/root/models:ro
     environment:
       - GGML_CUDA_GRAPHS=1
     command: >
@@ -239,3 +248,4 @@ volumes:
   hf_cache:
   pgadmin_data:
   caddy_data:
+  models:
