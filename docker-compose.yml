@@ -94,13 +94,13 @@ services:
       CHUNK_OVERLAP: "200"
       RAG_TEXT_SPLITTER: "token"
 
-      # ---------- LLM: OpenRouter ----------
+      # ---------- LLM: llama.cpp locale + OpenRouter ----------
       ENABLE_OPENAI_API: "true"
-      OPENAI_API_BASE_URLS: "https://openrouter.ai/api/v1"
-      OPENAI_API_KEYS: "${OPENROUTER_API_KEY:?serve OPENROUTER_API_KEY in .env}"
-      OPENAI_MODELS: "google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
+      OPENAI_API_BASE_URLS: "http://host.docker.internal:8081/v1;https://openrouter.ai/api/v1"
+      OPENAI_API_KEYS: "no-key;${OPENROUTER_API_KEY:?serve OPENROUTER_API_KEY in .env}"
+      OPENAI_MODELS: "Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf;google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
       ENABLE_MODEL_FILTER: "true"
-      MODEL_FILTER_LIST: "google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
+      MODEL_FILTER_LIST: "Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf;google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
 
       # ---------- Disabilita Ollama se non lo usi ----------
       ENABLE_OLLAMA_API: "false"

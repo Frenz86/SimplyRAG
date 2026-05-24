@@ -1,27 +1,4 @@
 services:
-  bonsai:
-    build:
-      context: .
-      dockerfile: Dockerfile.llamacpp
-    container_name: bonsai
-    volumes:
-      - ./models:/models
-    command: >
-      --model /models/Bonsai-8B-Q1_0.gguf
-      --alias bonsai-8b
-      --host 0.0.0.0
-      --port 8080
-      --ctx-size 8192
-      --threads 8
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
-      interval: 10s
-      start_period: 180s
-      retries: 5
-
   postgres:
     image: pgvector/pgvector:pg16
     container_name: postgres
@@ -36,6 +13,13 @@ services:
       test: ["CMD-SHELL", "pg_isready -U owui -d openwebui"]
       interval: 10s
       retries: 5
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   caddy:
     image: caddy:alpine
@@ -43,21 +27,42 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-    command: caddy reverse-proxy --from :80 --to open-webui:8080
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80 --server-response 2>&1 | grep -q 'HTTP/' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
-      - open-webui
-
+      open-webui:
+        condition: service_started
+      pgadmin:
+        condition: service_started
+    networks:
+      - frontend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:0.9.5  # verifica ultima stabile → https://github.com/open-webui/open-webui/releases
     container_name: open-webui
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-      bonsai:
-        condition: service_healthy
-    ports:
-      - "3000:8080"
+      llama-cpp:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
     environment:
       # ---------- Database ----------
       DATABASE_URL: postgresql://owui:${POSTGRES_PASSWORD}@postgres:5432/openwebui
@@ -77,25 +82,27 @@ services:
       RAG_EMBEDDING_QUERY_PREFIX: "query: "
       RAG_EMBEDDING_CONTENT_PREFIX: "passage: "
 
-      # ---------- Reranker INTERNO (CrossEncoder locale) ----------
-      ENABLE_RAG_HYBRID_SEARCH: "false"
-      RAG_RERANKING_ENGINE: ""                                # vuoto = CrossEncoder locale
-      RAG_RERANKING_MODEL: "" #BAAI/bge-reranker-v2-m3 molto lento se non ho GPU
-      RAG_TOP_K: "12"
+      # ---------- Ricerca ibrida BM25 + vettori ----------
+      ENABLE_RAG_HYBRID_SEARCH: "true"
+      RAG_TOP_K: "10"
       RAG_TOP_K_RERANKER: "5"
-      RAG_RELEVANCE_THRESHOLD: "0.0"
+      # Reranker (CrossEncoder locale) - lento senza GPU, disabilitato
+      #RAG_RERANKING_ENGINE: ""
+      #RAG_RERANKING_MODEL: ""                                # BAAI/bge-reranker-v2-m3 molto lento se non ho GPU
+      RAG_RELEVANCE_THRESHOLD: "0.3"
 
       # ---------- Chunking tarato per documenti lunghi ----------
       CHUNK_SIZE: "1500"
       CHUNK_OVERLAP: "200"
       RAG_TEXT_SPLITTER: "token"
 
-      # ---------- LLM: OpenRouter (cloud) + Bonsai (locale) ----------
-      # Open WebUI mostra entrambi nella selezione modello
+      # ---------- LLM: llama.cpp locale + OpenRouter ----------
       ENABLE_OPENAI_API: "true"
-      OPENAI_API_BASE_URLS: "https://openrouter.ai/api/v1;http://bonsai:8080/v1"
-      OPENAI_API_KEYS: "${OPENROUTER_API_KEY:?serve OPENROUTER_API_KEY in .env};sk-non-serve"
-      OPENAI_MODELS: "google/gemini-3.1-flash-lite,google/gemini-2.5-flash-lite,bonsai-8b"
+      OPENAI_API_BASE_URLS: "http://llama-cpp:8081/v1;https://openrouter.ai/api/v1"
+      OPENAI_API_KEYS: "no-key;${OPENROUTER_API_KEY:?serve OPENROUTER_API_KEY in .env}"
+      OPENAI_MODELS: "Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf;google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
+      ENABLE_MODEL_FILTER: "true"
+      MODEL_FILTER_LIST: "Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf;google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
 
       # ---------- Disabilita Ollama se non lo usi ----------
       ENABLE_OLLAMA_API: "false"
@@ -103,6 +110,8 @@ services:
       # ---------- Sicurezza ----------
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?genera una chiave random lunga}
       WEBUI_AUTH: "true"
+      ENABLE_PERSISTENT_CONFIG: "False"
+      BYPASS_MODEL_ACCESS_CONTROL: "True"
 
       # ---------- HuggingFace (necessario per scaricare i modelli) ----------
       HF_TOKEN: ${HF_TOKEN:-}
@@ -145,10 +154,81 @@ services:
     volumes:
       - openwebui_data:/app/backend/data
       - hf_cache:/root/.cache/huggingface         # cache modelli HF condivisa fra restart
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      - frontend
+      - backend
+
+  llama-cpp:
+    image: ghcr.io/ggerganov/llama.cpp:server-cuda12-b9191
+    container_name: llama-cpp
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - /root/models:/root/models:ro
+    command: >
+      -m /root/models/Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf
+      --port 8081 --host 0.0.0.0
+      --cache-type-k q8_0 --cache-type-v q8_0
+      --n-cpu-moe 37 --ngl 99 --no-mmap -c 8192 --mlock
+      --spec-type draft-mtp --spec-draft-n-max 3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  pgadmin:
+    image: dpage/pgadmin4:8.14
+    container_name: pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?serve PGADMIN_EMAIL in .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?serve PGADMIN_PASSWORD in .env}
+      SCRIPT_NAME: /pgadmin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - frontend
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
 
 volumes:
   pgdata:
   openwebui_data:
   hf_cache:
+  pgadmin_data:
+  caddy_data:
