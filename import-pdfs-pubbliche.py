@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 import requests
@@ -9,9 +10,9 @@ _SAFE_FILENAME = re.compile(r"^[\w\s\-\.\(\)\[\]àèéìòùÀÈÉÌÒÙ]+$", re
 def _esc(s: str) -> str:
     return s.replace("'", "''")
 
-EMAIL    = "admin@futura.com"
-PASSWORD = "futura1234"
-BASE     = "http://localhost"
+EMAIL    = os.environ["OWUI_EMAIL"]
+PASSWORD = os.environ["OWUI_PASSWORD"]
+BASE     = os.environ.get("OWUI_BASE", "http://localhost")
 
 COLLECTIONS = {
                 "risorse-umane":         "./pdf/risorse-umane",
