@@ -1,4 +1,6 @@
-# Compose per GTX 1060 6GB / 16GB RAM
+# # Compose per GTX 1060 6GB / 16GB RAM
+# HF_REPO=Qwen/Qwen2.5-14B-Instruct-GGUF
+# HF_MODEL=Qwen2.5-14B-Instruct-Q4_K_M.gguf
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -13,7 +15,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U owui -d openwebui"]
       interval: 10s
+      timeout: 5s
       retries: 5
+      start_period: 30s
     networks:
       - backend
     logging:
@@ -39,7 +43,7 @@ services:
       start_period: 10s
     depends_on:
       open-webui:
-        condition: service_started
+        condition: service_healthy
       pgadmin:
         condition: service_started
     networks:
@@ -58,7 +62,7 @@ services:
       postgres:
         condition: service_healthy
       llama-cpp:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: 30s
@@ -108,7 +112,7 @@ services:
       # ---------- Sicurezza ----------
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?genera una chiave random lunga}
       WEBUI_AUTH: "true"
-      ENABLE_PERSISTENT_CONFIG: "False"
+      ENABLE_PERSISTENT_CONFIG: "True"
       BYPASS_MODEL_ACCESS_CONTROL: "True"
 
       # ---------- HuggingFace ----------
@@ -155,7 +159,12 @@ services:
     networks:
       - frontend
       - backend
-
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        
   model-downloader:
     image: python:3.11-slim
     container_name: model-downloader
@@ -166,6 +175,7 @@ services:
       HF_TOKEN: ${HF_TOKEN:-}
       HF_REPO: ${HF_REPO:?serve HF_REPO in .env}
       HF_MODEL: ${HF_MODEL:?serve HF_MODEL in .env}
+<<<<<<< HEAD
       HF_INCLUDE: ${HF_INCLUDE:-}
     command:
       - bash
@@ -210,6 +220,18 @@ services:
         fi
         ls -la /root/models/*.gguf 2>/dev/null || echo "(no .gguf files)"
         exit $$RC
+=======
+    command:
+      - sh
+      - -c
+      - |
+          pip install -q huggingface-hub
+          if [ -f "/root/models/$$HF_MODEL" ]; then
+            echo "Modello gia presente, skip download."
+          else
+            hf download "$$HF_REPO" --include "*q4_k_m*.gguf" --local-dir /root/models
+          fi
+>>>>>>> b0310ab273ca1389266d8758963cb66b744330ae
     logging:
       driver: json-file
       options:

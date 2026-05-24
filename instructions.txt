@@ -15,3 +15,7 @@ docker run --rm --gpus all --ulimit memlock=-1 --cap-add=IPC_LOCK \
     --n-cpu-moe 37 --ngl 99 --no-mmap -c 8192 --mlock \
     --spec-type draft-mtp --spec-draft-n-max 3
 
+
+docker compose -f docker-compose-gpu-gtx1060.yml up -d
+
+
