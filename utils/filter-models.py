@@ -1,11 +1,13 @@
+import os
 import requests
 from pathlib import Path
+from dotenv import load_dotenv
 
-DIR = Path(__file__).parent
+load_dotenv(Path(__file__).parent.parent / ".env")
 
-EMAIL    = "admin@futura.com"
-PASSWORD = "futura1234"
-BASE     = "http://localhost"
+EMAIL    = os.environ["OWUI_EMAIL"]
+PASSWORD = os.environ["OWUI_PASSWORD"]
+BASE     = os.environ.get("OWUI_BASE", "http://localhost")
 
 token = requests.post(f"{BASE}/api/v1/auths/signin", json={"email": EMAIL, "password": PASSWORD}).json()["token"]
 headers = {"Authorization": f"Bearer {token}"}
