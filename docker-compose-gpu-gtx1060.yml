@@ -175,6 +175,52 @@ services:
       HF_TOKEN: ${HF_TOKEN:-}
       HF_REPO: ${HF_REPO:?serve HF_REPO in .env}
       HF_MODEL: ${HF_MODEL:?serve HF_MODEL in .env}
+<<<<<<< HEAD
+      HF_INCLUDE: ${HF_INCLUDE:-}
+    command:
+      - bash
+      - -c
+      - |
+        set -uo pipefail
+        if [ -f "/root/models/$${HF_MODEL}" ]; then
+          echo "Modello gia presente, skip download."
+          exit 0
+        fi
+        pip install -q -U huggingface_hub
+        export HF_HUB_DISABLE_PROGRESS_BARS=1
+        echo "Repo:    $${HF_REPO}"
+        echo "Pattern: $${HF_INCLUDE:-$${HF_MODEL}}"
+        echo "Dest:    /root/models"
+        LOG=/tmp/hf.log
+        if [ -n "$${HF_INCLUDE:-}" ]; then
+          hf download "$${HF_REPO}" --include "$${HF_INCLUDE}" --local-dir /root/models > $$LOG 2>&1 &
+        else
+          hf download "$${HF_REPO}" "$${HF_MODEL}" --local-dir /root/models > $$LOG 2>&1 &
+        fi
+        HF_PID=$!
+        START=$(date +%s)
+        while kill -0 $$HF_PID 2>/dev/null; do
+          sleep 20
+          ELAPSED=$(( $(date +%s) - START ))
+          DONE_B=$(du -bc /root/models/*.gguf 2>/dev/null | tail -1 | awk '{print $1}')
+          INC_B=$(du -bc /root/models/.cache/huggingface/download/*.incomplete 2>/dev/null | tail -1 | awk '{print $1}')
+          DONE_MB=$(( $${DONE_B:-0} / 1048576 ))
+          INC_MB=$(( $${INC_B:-0} / 1048576 ))
+          TOTAL_MB=$(( DONE_MB + INC_MB ))
+          MIN=$(( ELAPSED / 60 ))
+          SEC=$(( ELAPSED % 60 ))
+          printf "[%02d:%02d] done=%d MB | incomplete=%d MB | total=%d MB\n" $$MIN $$SEC $$DONE_MB $$INC_MB $$TOTAL_MB
+        done
+        wait $$HF_PID
+        RC=$?
+        echo "=== hf download finished (rc=$$RC) ==="
+        if [ $$RC -ne 0 ] || [ ! -s $$LOG ]; then
+          echo "=== hf output (last 100 lines) ==="
+          tail -100 $$LOG 2>/dev/null || echo "(no log file)"
+        fi
+        ls -la /root/models/*.gguf 2>/dev/null || echo "(no .gguf files)"
+        exit $$RC
+=======
     command:
       - sh
       - -c
@@ -185,6 +231,7 @@ services:
           else
             hf download "$$HF_REPO" --include "*q4_k_m*.gguf" --local-dir /root/models
           fi
+>>>>>>> b0310ab273ca1389266d8758963cb66b744330ae
     logging:
       driver: json-file
       options:
@@ -216,8 +263,8 @@ services:
     command: >
       -m /root/models/${HF_MODEL}
       --port 8081 --host 0.0.0.0
-      -c 4096 --ngl 22
-      --cache-type-k q4_0 --cache-type-v q4_0
+      -c 4096 --n-gpu-layers 22
+      --cache-type-k q4_0
       --threads 4 --threads-batch 6
       --mlock
     healthcheck:
