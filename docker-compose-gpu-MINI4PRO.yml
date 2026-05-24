@@ -1,3 +1,4 @@
+# Compose per MAC M4PPRO 48 Mem-unif
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -48,8 +49,9 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
   open-webui:
-    image: ghcr.io/open-webui/open-webui:0.9.5  # verifica ultima stabile → https://github.com/open-webui/open-webui/releases
+    image: ghcr.io/open-webui/open-webui:0.9.5
     container_name: open-webui
     restart: unless-stopped
     depends_on:
@@ -64,59 +66,34 @@ services:
       retries: 5
       start_period: 300s
     environment:
-      # ---------- Database ----------
       DATABASE_URL: postgresql://owui:${POSTGRES_PASSWORD}@postgres:5432/openwebui
-
-      # ---------- Vector DB ----------
       VECTOR_DB: pgvector
       PGVECTOR_DB_URL: postgresql://owui:${POSTGRES_PASSWORD}@postgres:5432/openwebui
-
-      # ---------- Content extraction: built-in ----------
       CONTENT_EXTRACTION_ENGINE: ""
-
-      # ---------- Embedding: e5-large LOCALE in-process ----------
-      RAG_EMBEDDING_ENGINE: ""                                # vuoto = SentenceTransformers locale
-      RAG_EMBEDDING_MODEL: "intfloat/multilingual-e5-base" # 1GB
-      #RAG_EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+      RAG_EMBEDDING_ENGINE: ""
+      RAG_EMBEDDING_MODEL: "intfloat/multilingual-e5-base"
       RAG_EMBEDDING_BATCH_SIZE: "8"
       RAG_EMBEDDING_QUERY_PREFIX: "query: "
       RAG_EMBEDDING_CONTENT_PREFIX: "passage: "
-
-      # ---------- Ricerca ibrida BM25 + vettori ----------
       ENABLE_RAG_HYBRID_SEARCH: "true"
       RAG_TOP_K: "10"
       RAG_TOP_K_RERANKER: "5"
-      # Reranker (CrossEncoder locale) - lento senza GPU, disabilitato
-      #RAG_RERANKING_ENGINE: ""
-      #RAG_RERANKING_MODEL: ""                                # BAAI/bge-reranker-v2-m3 molto lento se non ho GPU
       RAG_RELEVANCE_THRESHOLD: "0.3"
-
-      # ---------- Chunking tarato per documenti lunghi ----------
       CHUNK_SIZE: "1500"
       CHUNK_OVERLAP: "200"
       RAG_TEXT_SPLITTER: "token"
-
-      # ---------- LLM: llama.cpp locale + OpenRouter ----------
       ENABLE_OPENAI_API: "true"
       OPENAI_API_BASE_URLS: "http://llama-cpp:8081/v1;https://openrouter.ai/api/v1"
       OPENAI_API_KEYS: "no-key;${OPENROUTER_API_KEY:?serve OPENROUTER_API_KEY in .env}"
-      OPENAI_MODELS: "Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf;google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
+      OPENAI_MODELS: "${HF_MODEL};google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
       ENABLE_MODEL_FILTER: "true"
-      MODEL_FILTER_LIST: "Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf;google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
-
-      # ---------- Disabilita Ollama se non lo usi ----------
+      MODEL_FILTER_LIST: "${HF_MODEL};google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
       ENABLE_OLLAMA_API: "false"
-
-      # ---------- Sicurezza ----------
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?genera una chiave random lunga}
       WEBUI_AUTH: "true"
       ENABLE_PERSISTENT_CONFIG: "False"
       BYPASS_MODEL_ACCESS_CONTROL: "True"
-
-      # ---------- HuggingFace (necessario per scaricare i modelli) ----------
       HF_TOKEN: ${HF_TOKEN:-}
-
-      # ---------- RAG-only: rispondi SOLO dai documenti ----------
       DEFAULT_RAG_TEMPLATE: |
         Usa ESCLUSIVAMENTE le fonti qui sotto per rispondere.
         Non usare conoscenza esterna. Non inventare informazioni.
@@ -128,8 +105,6 @@ services:
 
         ### DOMANDA ###
         [query]
-
-      # ---------- Suggerimenti home: domande aziendali ----------
       DEFAULT_PROMPT_SUGGESTIONS: >-
         [
           {"title":["Riepilogami il documento","in 5 punti chiave"],"content":"Riepilogami questo documento in massimo 5 punti chiave."},
@@ -137,14 +112,11 @@ services:
           {"title":["Spiega i termini tecnici","presenti nel testo"],"content":"Identifica e spiega i termini tecnici o specialistici presenti nel documento."},
           {"title":["Cosa devo fare","in base a questo documento?"],"content":"Quali azioni o passi devo intraprendere in base al contenuto di questo documento?"}
         ]
-
-      # ---------- Follow-up in italiano, vincolati al documento ----------
       FOLLOW_UP_GENERATION_PROMPT_TEMPLATE: >-
         Basandoti SOLO sul documento consultato, genera 3 domande di approfondimento
         in italiano che l'utente potrebbe voler fare. Le domande devono riguardare
         esclusivamente i contenuti presenti nelle fonti recuperate.
         Rispondi con le sole 3 domande, una per riga, senza numerazione né prefissi.
-
       WEBUI_DEFAULT_SYSTEM_PROMPT: >-
         Sei un assistente documentale. Rispondi SOLO in base ai documenti
         forniti nel contesto della conversazione. Se l'informazione richiesta
@@ -153,35 +125,57 @@ services:
         disponibili." Non usare la tua conoscenza generale. Non inventare.
     volumes:
       - openwebui_data:/app/backend/data
-      - hf_cache:/root/.cache/huggingface         # cache modelli HF condivisa fra restart
+      - hf_cache:/root/.cache/huggingface
     networks:
       - frontend
       - backend
 
+  model-downloader:
+    image: python:3.13-slim
+    container_name: model-downloader
+    restart: "no"
+    volumes:
+      - /root/models:/root/models
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_HUB_ENABLE_HF_TRANSFER: "1"
+      HF_REPO: ${HF_REPO:?serve HF_REPO in .env}
+      HF_MODEL: ${HF_MODEL:?serve HF_MODEL in .env}
+    command: >
+      bash -c "
+        if [ -f /root/models/\${HF_MODEL} ]; then
+          echo 'Modello gia presente, skip download.';
+        else
+          pip install -q huggingface-hub hf_transfer &&
+          huggingface-cli download \${HF_REPO} \
+            \${HF_MODEL} \
+            --local-dir /root/models \
+            --local-dir-use-symlinks False;
+        fi"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   llama-cpp:
-    image: ghcr.io/ggerganov/llama.cpp:server-cuda12-b9191
+    image: ghcr.io/ggerganov/llama.cpp:server-metal-b9191
     container_name: llama-cpp
     restart: unless-stopped
-    cap_add:
-      - IPC_LOCK
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    depends_on:
+      model-downloader:
+        condition: service_completed_successfully
+    ipc: host
+    devices:
+      - /dev/gva0:/dev/gva0
     volumes:
       - /root/models:/root/models:ro
     command: >
-      -m /root/models/Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf
+      -m /root/models/${HF_MODEL}
       --port 8081 --host 0.0.0.0
+      -c 32000 --ngl 99
       --cache-type-k q8_0 --cache-type-v q8_0
-      --n-cpu-moe 37 --ngl 99 --no-mmap -c 8192 --mlock
+      --threads 12 --threads-batch 12
       --spec-type draft-mtp --spec-draft-n-max 3
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8081/health || exit 1"]

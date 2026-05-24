@@ -1,0 +1,264 @@
+# Compose per GTX 1060 6GB / 16GB RAM
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: openwebui
+      POSTGRES_USER: owui
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?serve POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U owui -d openwebui"]
+      interval: 10s
+      retries: 5
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80 --server-response 2>&1 | grep -q 'HTTP/' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      open-webui:
+        condition: service_started
+      pgadmin:
+        condition: service_started
+    networks:
+      - frontend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:0.9.5
+    container_name: open-webui
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      llama-cpp:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+    environment:
+      # ---------- Database ----------
+      DATABASE_URL: postgresql://owui:${POSTGRES_PASSWORD}@postgres:5432/openwebui
+
+      # ---------- Vector DB ----------
+      VECTOR_DB: pgvector
+      PGVECTOR_DB_URL: postgresql://owui:${POSTGRES_PASSWORD}@postgres:5432/openwebui
+
+      # ---------- Content extraction: built-in ----------
+      CONTENT_EXTRACTION_ENGINE: ""
+
+      # ---------- Embedding: e5-large LOCALE in-process ----------
+      RAG_EMBEDDING_ENGINE: ""
+      RAG_EMBEDDING_MODEL: "intfloat/multilingual-e5-base"
+      RAG_EMBEDDING_BATCH_SIZE: "8"
+      RAG_EMBEDDING_QUERY_PREFIX: "query: "
+      RAG_EMBEDDING_CONTENT_PREFIX: "passage: "
+
+      # ---------- Ricerca ibrida BM25 + vettori ----------
+      ENABLE_RAG_HYBRID_SEARCH: "true"
+      RAG_TOP_K: "10"
+      RAG_TOP_K_RERANKER: "5"
+      RAG_RELEVANCE_THRESHOLD: "0.3"
+
+      # ---------- Chunking tarato per documenti lunghi ----------
+      CHUNK_SIZE: "1500"
+      CHUNK_OVERLAP: "200"
+      RAG_TEXT_SPLITTER: "token"
+
+      # ---------- LLM: llama.cpp locale + OpenRouter ----------
+      ENABLE_OPENAI_API: "true"
+      OPENAI_API_BASE_URLS: "http://llama-cpp:8081/v1;https://openrouter.ai/api/v1"
+      OPENAI_API_KEYS: "no-key;${OPENROUTER_API_KEY:?serve OPENROUTER_API_KEY in .env}"
+      OPENAI_MODELS: "${HF_MODEL};google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
+      ENABLE_MODEL_FILTER: "true"
+      MODEL_FILTER_LIST: "${HF_MODEL};google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
+
+      # ---------- Disabilita Ollama se non lo usi ----------
+      ENABLE_OLLAMA_API: "false"
+
+      # ---------- Sicurezza ----------
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?genera una chiave random lunga}
+      WEBUI_AUTH: "true"
+      ENABLE_PERSISTENT_CONFIG: "False"
+      BYPASS_MODEL_ACCESS_CONTROL: "True"
+
+      # ---------- HuggingFace ----------
+      HF_TOKEN: ${HF_TOKEN:-}
+
+      # ---------- RAG-only: rispondi SOLO dai documenti ----------
+      DEFAULT_RAG_TEMPLATE: |
+        Usa ESCLUSIVAMENTE le fonti qui sotto per rispondere.
+        Non usare conoscenza esterna. Non inventare informazioni.
+        Se la risposta non è presente nelle fonti, rispondi:
+        "Non ho trovato questa informazione nei documenti disponibili."
+
+        ### FONTI ###
+        [context]
+
+        ### DOMANDA ###
+        [query]
+
+      # ---------- Suggerimenti home ----------
+      DEFAULT_PROMPT_SUGGESTIONS: >-
+        [
+          {"title":["Riepilogami il documento","in 5 punti chiave"],"content":"Riepilogami questo documento in massimo 5 punti chiave."},
+          {"title":["Quali sono le scadenze","o date importanti?"],"content":"Elenca tutte le scadenze, date e termini importanti presenti nel documento."},
+          {"title":["Spiega i termini tecnici","presenti nel testo"],"content":"Identifica e spiega i termini tecnici o specialistici presenti nel documento."},
+          {"title":["Cosa devo fare","in base a questo documento?"],"content":"Quali azioni o passi devo intraprendere in base al contenuto di questo documento?"}
+        ]
+
+      # ---------- Follow-up ----------
+      FOLLOW_UP_GENERATION_PROMPT_TEMPLATE: >-
+        Basandoti SOLO sul documento consultato, genera 3 domande di approfondimento
+        in italiano che l'utente potrebbe voler fare. Le domande devono riguardare
+        esclusivamente i contenuti presenti nelle fonti recuperate.
+        Rispondi con le sole 3 domande, una per riga, senza numerazione né prefissi.
+
+      WEBUI_DEFAULT_SYSTEM_PROMPT: >-
+        Sei un assistente documentale. Rispondi SOLO in base ai documenti
+        forniti nel contesto della conversazione. Se l'informazione richiesta
+        non è presente nei documenti allegati o nella knowledge base, dì
+        esplicitamente: "Non ho trovato questa informazione nei documenti
+        disponibili." Non usare la tua conoscenza generale. Non inventare.
+    volumes:
+      - openwebui_data:/app/backend/data
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - frontend
+      - backend
+
+  model-downloader:
+    image: python:3.11-slim
+    container_name: model-downloader
+    restart: "no"
+    volumes:
+      - /root/models:/root/models
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_HUB_ENABLE_HF_TRANSFER: "1"
+      HF_REPO: ${HF_REPO:?serve HF_REPO in .env}
+      HF_MODEL: ${HF_MODEL:?serve HF_MODEL in .env}
+    command: >
+      bash -c "
+        if [ -f /root/models/\${HF_MODEL} ]; then
+          echo 'Modello gia presente, skip download.';
+        else
+          pip install -q huggingface-hub hf_transfer &&
+          huggingface-cli download \${HF_REPO} \
+            \${HF_MODEL} \
+            --local-dir /root/models \
+            --local-dir-use-symlinks False;
+        fi"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  llama-cpp:
+    image: ghcr.io/ggerganov/llama.cpp:server-cuda12-b9191
+    container_name: llama-cpp
+    restart: unless-stopped
+    depends_on:
+      model-downloader:
+        condition: service_completed_successfully
+    cap_add:
+      - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - /root/models:/root/models:ro
+    command: >
+      -m /root/models/${HF_MODEL}
+      --port 8081 --host 0.0.0.0
+      -c 4096 --ngl 22
+      --cache-type-k q4_0 --cache-type-v q4_0
+      --threads 4 --threads-batch 6
+      --mlock
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  pgadmin:
+    image: dpage/pgadmin4:8.14
+    container_name: pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?serve PGADMIN_EMAIL in .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?serve PGADMIN_PASSWORD in .env}
+      SCRIPT_NAME: /pgadmin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - frontend
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+
+volumes:
+  pgdata:
+  openwebui_data:
+  hf_cache:
+  pgadmin_data:
+  caddy_data:
