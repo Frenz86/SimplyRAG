@@ -87,7 +87,7 @@ services:
       # Reranker (CrossEncoder locale) - lento senza GPU, disabilitato
       #RAG_RERANKING_ENGINE: ""
       #RAG_RERANKING_MODEL: ""                                # BAAI/bge-reranker-v2-m3 molto lento se non ho GPU
-      RAG_RELEVANCE_THRESHOLD: "0.2"
+      RAG_RELEVANCE_THRESHOLD: "0.3"
 
       # ---------- Chunking tarato per documenti lunghi ----------
       CHUNK_SIZE: "1500"
