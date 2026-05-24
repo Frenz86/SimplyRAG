@@ -164,7 +164,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
+        
   model-downloader:
     image: python:3.11-slim
     container_name: model-downloader
@@ -173,20 +173,18 @@ services:
       - models:/root/models
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
-      HF_HUB_ENABLE_HF_TRANSFER: "1"
       HF_REPO: ${HF_REPO:?serve HF_REPO in .env}
       HF_MODEL: ${HF_MODEL:?serve HF_MODEL in .env}
-    command: >
-      bash -c "
-        if [ -f /root/models/\${HF_MODEL} ]; then
-          echo 'Modello gia presente, skip download.';
-        else
-          pip install -q huggingface-hub hf_transfer &&
-          huggingface-cli download \${HF_REPO} \
-            \${HF_MODEL} \
-            --local-dir /root/models \
-            --local-dir-use-symlinks False;
-        fi"
+    command:
+      - sh
+      - -c
+      - |
+          pip install -q huggingface-hub
+          if [ -f "/root/models/$$HF_MODEL" ]; then
+            echo "Modello gia presente, skip download."
+          else
+            hf download "$$HF_REPO" --include "*q4_k_m*.gguf" --local-dir /root/models
+          fi
     logging:
       driver: json-file
       options:
