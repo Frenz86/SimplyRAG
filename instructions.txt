@@ -1,10 +1,7 @@
 # 1) Tira su tutto
 docker compose up -d
 
-# 2) Abilita l'estensione vector su Postgres (una volta sola)
-docker exec -it postgres psql -U owui -d openwebui -c "CREATE EXTENSION IF NOT EXISTS vector;"
-
-# 3) Apri OpenWebUI
+# 2) Apri OpenWebUI
 # http://localhost  → crea il primo utente (sarà admin)
 
 

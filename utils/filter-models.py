@@ -1,19 +1,18 @@
 import requests
-import json
 from pathlib import Path
 
 DIR = Path(__file__).parent
 
 EMAIL    = "admin@futura.com"
 PASSWORD = "futura1234"
-BASE     = "http://localhost:3000"
+BASE     = "http://localhost"
 
 token = requests.post(f"{BASE}/api/v1/auths/signin", json={"email": EMAIL, "password": PASSWORD}).json()["token"]
 headers = {"Authorization": f"Bearer {token}"}
 
 KEEP = {
-    "google/gemini-3.1-flash-lite",
     "google/gemini-2.5-flash-lite",
+    "google/gemini-2.5-flash",
 }
 
 # Prendi tutti i modelli disponibili da Open WebUI

@@ -10,15 +10,39 @@ Sistema RAG locale basato su OpenWebUI + PostgreSQL/pgvector.
 # 1) Crea il file .env (una volta sola)
 cp .env.example .env        # poi edita con le tue chiavi
 
-# 2) Tira su tutto
+# 2) Tira su tutto (builda postgres la prima volta, ~1 min)
 docker compose up -d
 
-# 3) Abilita l'estensione vector su Postgres (una volta sola)
-docker exec -it postgres psql -U owui -d openwebui -c "CREATE EXTENSION IF NOT EXISTS vector;"
-
-# 4) Apri OpenWebUI
+# 3) Apri OpenWebUI
 # http://localhost  → crea il primo utente (sarà admin)
 ```
+
+> L'estensione `vector` viene abilitata automaticamente dal container postgres al primo avvio — nessun comando manuale necessario.
+
+**Variabili richieste in `.env`**
+
+```env
+POSTGRES_PASSWORD=...
+WEBUI_SECRET_KEY=...
+OPENROUTER_API_KEY=...
+PGADMIN_EMAIL=admin@esempio.com
+PGADMIN_PASSWORD=...
+HF_TOKEN=                  # opzionale
+```
+
+---
+
+## pgAdmin
+
+Interfaccia web per esplorare il database (tabelle, vettori, query SQL), servita da Caddy su HTTPS.
+
+- URL: [http://localhost/pgadmin](http://localhost/pgadmin)
+- Login: le credenziali `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` dal `.env`
+- Il server **SimplyRAG** (postgres) è già preconfigurato — alla prima apertura chiede solo la password del DB (`POSTGRES_PASSWORD`)
+
+> Al primo avvio il browser mostrerà un avviso per il certificato self-signed (`tls internal` di Caddy). Puoi accettarlo manualmente oppure aggiungere la CA locale di Caddy al tuo sistema: `docker exec caddy caddy trust`.
+
+Per vedere i vettori: `openwebui` → schema `public` → tabella `vectorstore` (o simili generate da pgvector).
 
 ---
 

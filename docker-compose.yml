@@ -13,6 +13,13 @@ services:
       test: ["CMD-SHELL", "pg_isready -U owui -d openwebui"]
       interval: 10s
       retries: 5
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   caddy:
     image: caddy:alpine
@@ -20,12 +27,29 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-    command: caddy reverse-proxy --from :80 --to open-webui:8080
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80 --server-response 2>&1 | grep -q 'HTTP/' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       open-webui:
-        condition: service_healthy
+        condition: service_started
+      pgadmin:
+        condition: service_started
+    networks:
+      - frontend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   open-webui:
-    image: ghcr.io/open-webui/open-webui:0.9.5-slim  # verifica ultima stabile → https://github.com/open-webui/open-webui/releases
+    image: ghcr.io/open-webui/open-webui:0.9.5  # verifica ultima stabile → https://github.com/open-webui/open-webui/releases
     container_name: open-webui
     restart: unless-stopped
     depends_on:
@@ -36,9 +60,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
-    ports:
-      - "127.0.0.1:3000:8080"
+      start_period: 300s
     environment:
       # ---------- Database ----------
       DATABASE_URL: postgresql://owui:${POSTGRES_PASSWORD}@postgres:5432/openwebui
@@ -58,12 +80,13 @@ services:
       RAG_EMBEDDING_QUERY_PREFIX: "query: "
       RAG_EMBEDDING_CONTENT_PREFIX: "passage: "
 
-      # ---------- Reranker INTERNO (CrossEncoder locale) ----------
+      # ---------- Ricerca ibrida BM25 + vettori ----------
       ENABLE_RAG_HYBRID_SEARCH: "true"
-      RAG_RERANKING_ENGINE: ""                                # vuoto = CrossEncoder locale
-      RAG_RERANKING_MODEL: "" #BAAI/bge-reranker-v2-m3 molto lento se non ho GPU
-      RAG_TOP_K: "12"
+      RAG_TOP_K: "10"
       RAG_TOP_K_RERANKER: "5"
+      # Reranker (CrossEncoder locale) - lento senza GPU, disabilitato
+      #RAG_RERANKING_ENGINE: ""
+      #RAG_RERANKING_MODEL: ""                                # BAAI/bge-reranker-v2-m3 molto lento se non ho GPU
       RAG_RELEVANCE_THRESHOLD: "0.2"
 
       # ---------- Chunking tarato per documenti lunghi ----------
@@ -71,12 +94,13 @@ services:
       CHUNK_OVERLAP: "200"
       RAG_TEXT_SPLITTER: "token"
 
-      # ---------- LLM: OpenRouter (cloud) + Bonsai (locale) ----------
-      # Open WebUI mostra entrambi nella selezione modello
+      # ---------- LLM: OpenRouter ----------
       ENABLE_OPENAI_API: "true"
       OPENAI_API_BASE_URLS: "https://openrouter.ai/api/v1"
-      OPENAI_API_KEYS: "${OPENROUTER_API_KEY:?serve OPENROUTER_API_KEY in .env};sk-non-serve"
-      OPENAI_MODELS: "google/gemini-3.1-flash-lite,google/gemini-2.5-flash-lite"
+      OPENAI_API_KEYS: "${OPENROUTER_API_KEY:?serve OPENROUTER_API_KEY in .env}"
+      OPENAI_MODELS: "google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
+      ENABLE_MODEL_FILTER: "true"
+      MODEL_FILTER_LIST: "google/gemini-2.5-flash-lite;google/gemini-2.5-flash"
 
       # ---------- Disabilita Ollama se non lo usi ----------
       ENABLE_OLLAMA_API: "false"
@@ -84,6 +108,8 @@ services:
       # ---------- Sicurezza ----------
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?genera una chiave random lunga}
       WEBUI_AUTH: "true"
+      ENABLE_PERSISTENT_CONFIG: "False"
+      BYPASS_MODEL_ACCESS_CONTROL: "True"
 
       # ---------- HuggingFace (necessario per scaricare i modelli) ----------
       HF_TOKEN: ${HF_TOKEN:-}
@@ -126,10 +152,44 @@ services:
     volumes:
       - openwebui_data:/app/backend/data
       - hf_cache:/root/.cache/huggingface         # cache modelli HF condivisa fra restart
+    networks:
+      - frontend
+      - backend
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?serve PGADMIN_EMAIL in .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?serve PGADMIN_PASSWORD in .env}
+      SCRIPT_NAME: /pgadmin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - frontend
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
 
 volumes:
   pgdata:
   openwebui_data:
   hf_cache:
+  pgadmin_data:
+  caddy_data:

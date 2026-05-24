@@ -1,7 +1,13 @@
+import re
 import subprocess
 import requests
 import pdfplumber
 from pathlib import Path
+
+_SAFE_FILENAME = re.compile(r"^[\w\s\-\.\(\)\[\]àèéìòùÀÈÉÌÒÙ]+$", re.UNICODE)
+
+def _esc(s: str) -> str:
+    return s.replace("'", "''")
 
 EMAIL    = "admin@futura.com"
 PASSWORD = "futura1234"
@@ -24,12 +30,13 @@ def pg(sql):
     return rows
 
 def already_in_collection(coll_name, filename):
-    safe = filename.replace("'", "''")
+    if not _SAFE_FILENAME.match(filename):
+        raise ValueError(f"Nome file non sicuro: {filename!r}")
     rows = pg(f"""
         SELECT 1 FROM knowledge_file kf
         JOIN file f ON f.id = kf.file_id
         JOIN knowledge k ON k.id = kf.knowledge_id
-        WHERE k.name = '{coll_name}' AND f.filename = '{safe}'
+        WHERE k.name = '{_esc(coll_name)}' AND f.filename = '{_esc(filename)}'
         LIMIT 1
     """)
     return len(rows) > 0
@@ -59,6 +66,9 @@ for coll_name, folder in COLLECTIONS.items():
         coll_id = r.json()["id"]
         all_collections.append({"name": coll_name, "id": coll_id})
         print(f"\n[{coll_name}] Collection creata: {coll_id}")
+
+    requests.post(f"{BASE}/api/v1/knowledge/{coll_id}/access/update", headers=headers,
+                  json={"access_grants": [{"principal_type": "user", "principal_id": "*", "permission": "read"}]})
 
     for pdf in pdfs:
         if already_in_collection(coll_name, pdf.name):
