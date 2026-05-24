@@ -1,4 +1,4 @@
-# Compose per RTX 5060-ti 16GB / 32GB RAM
+# Compose per RTX 5060-ti16GB - 32GB RAM
 services:
   postgres:
     image: pgvector/pgvector:pg16
