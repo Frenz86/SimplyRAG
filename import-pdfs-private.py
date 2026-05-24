@@ -4,6 +4,9 @@ import subprocess
 import requests
 import pdfplumber
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 _SAFE_FILENAME = re.compile(r"^[\w\s\-\.\(\)\[\]àèéìòùÀÈÉÌÒÙ]+$", re.UNICODE)
 
