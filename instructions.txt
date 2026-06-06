@@ -12,17 +12,6 @@ python import-pdfs-pubbliche.py
 ###delete 
 python cleanup-collections.py
 
-#############################################################
-docker run --rm --gpus all --ulimit memlock=-1 --cap-add=IPC_LOCK \
-    -v /root:/root -p 8081:8081 \
-    ghcr.io/ggerganov/llama.cpp:server-cuda12-b9191 \
-    -m /root/models/Qwen3.6-35B-A3B-MTP-UD-Q4_K_M.gguf \
-    --port 8081 --host 0.0.0.0 \
-    --cache-type-k q8_0 --cache-type-v q8_0 \
-    --n-cpu-moe 37 --ngl 99 --no-mmap -c 8192 --mlock \
-    --spec-type draft-mtp --spec-draft-n-max 3
-
-
-docker compose -f docker-compose-gpu-gtx1060.yml up -d
+2
 
 

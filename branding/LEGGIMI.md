@@ -12,6 +12,19 @@ Metti qui le tue immagini per sostituire logo e favicon di OpenWebUI.
 > I nomi dei file **devono** essere esattamente `favicon.png` e `splash.png`.
 > Se hai un solo logo quadrato, puoi usare lo stesso file per entrambi.
 
+### Favicon della tab del browser
+
+La tab del browser **non** usa `favicon.png`: carica `favicon.svg`, `favicon.ico`,
+`favicon-96x96.png` e `apple-touch-icon.png` (Chrome preferisce l'SVG). Queste varianti
+si **generano** automaticamente da `favicon.png`:
+
+```
+python branding/gen-favicons.py
+```
+
+Rilancialo ogni volta che cambi `favicon.png`. Lo script centra il logo (anche
+rettangolare) su un canvas quadrato trasparente ed esporta tutte le varianti.
+
 ## Come attivarli
 
 1. Metti `favicon.png` e `splash.png` in questa cartella.
