@@ -4,13 +4,13 @@ docker compose up -d
 # 2) Apri OpenWebUI
 # http://localhost  → crea il primo utente (sarà admin)
 
-apri la powershell da vscode:
-
-
 
 python utils/filter-models.py
 
 python import-pdfs-pubbliche.py
+
+###delete 
+python cleanup-collections.py
 
 #############################################################
 docker run --rm --gpus all --ulimit memlock=-1 --cap-add=IPC_LOCK \
