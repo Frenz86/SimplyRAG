@@ -1,17 +1,10 @@
 import os
-import re
-import subprocess
 import requests
 import pdfplumber
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
-
-_SAFE_FILENAME = re.compile(r"^[\w\s\-\.\(\)\[\]àèéìòùÀÈÉÌÒÙ]+$", re.UNICODE)
-
-def _esc(s: str) -> str:
-    return s.replace("'", "''")
 
 EMAIL    = os.environ["OWUI_EMAIL"]
 PASSWORD = os.environ["OWUI_PASSWORD"]
@@ -23,27 +16,6 @@ COLLECTIONS = {
                 "amministrazione":       "./pdf/amministrazione",
                 "qualita":               "./pdf/qualita",
                 }
-
-def pg(sql):
-    r = subprocess.run(
-        ["docker", "exec", "postgres", "psql", "-U", "owui", "-d", "openwebui",
-         "-t", "-A", "-F", "\t", "-c", sql],
-        capture_output=True, text=True, check=True
-    )
-    rows = [line.split("\t") for line in r.stdout.strip().splitlines() if line.strip()]
-    return rows
-
-def already_in_collection(coll_name, filename):
-    if not _SAFE_FILENAME.match(filename):
-        raise ValueError(f"Nome file non sicuro: {filename!r}")
-    rows = pg(f"""
-        SELECT 1 FROM knowledge_file kf
-        JOIN file f ON f.id = kf.file_id
-        JOIN knowledge k ON k.id = kf.knowledge_id
-        WHERE k.name = '{_esc(coll_name)}' AND f.filename = '{_esc(filename)}'
-        LIMIT 1
-    """)
-    return len(rows) > 0
 
 r = requests.post(f"{BASE}/api/v1/auths/signin", json={"email": EMAIL, "password": PASSWORD})
 r.raise_for_status()
@@ -75,10 +47,6 @@ for coll_name, folder in COLLECTIONS.items():
                   json={"access_grants": []})
 
     for pdf in pdfs:
-        if already_in_collection(coll_name, pdf.name):
-            print(f"  SKIP: {pdf.name}")
-            continue
-
         print(f"  Upload: {pdf.name}")
         with open(pdf, "rb") as f:
             r = requests.post(f"{BASE}/api/v1/files/", headers=headers,
@@ -94,13 +62,19 @@ for coll_name, folder in COLLECTIONS.items():
                            json={"file_id": file_id, "content": text})
         if not rp.ok:
             print(f"    ERRORE process: {rp.status_code} {rp.text[:200]}")
+            requests.delete(f"{BASE}/api/v1/files/{file_id}", headers=headers)
             continue
 
         r2 = requests.post(f"{BASE}/api/v1/knowledge/{coll_id}/file/add", headers=headers,
                            json={"file_id": file_id})
+        # Dedup nativo OpenWebUI: stesso contenuto gia presente -> SKIP, rimuovo il file caricato.
         if r2.ok:
             print(f"    OK")
+        elif r2.status_code == 400 and "Duplicate content" in r2.text:
+            print(f"    SKIP (contenuto gia presente)")
+            requests.delete(f"{BASE}/api/v1/files/{file_id}", headers=headers)
         else:
             print(f"    ERRORE add: {r2.status_code} {r2.text[:200]}")
+            requests.delete(f"{BASE}/api/v1/files/{file_id}", headers=headers)
 
 print("\nFatto!")

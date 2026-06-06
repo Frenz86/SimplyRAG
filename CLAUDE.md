@@ -92,7 +92,7 @@ Il modello embedding **non** viene scaricato da open-webui a runtime (lo fa in m
 - **Smart directory sync built-in**: Open WebUI ora sincronizza nativamente una directory locale in una knowledge base (checksum-based, solo file nuovi/modificati). Gli script `import-pdfs-*.py` restano necessari perché gestiscono `access_grants` (pubblico/privato) che il sync nativo non gestisce.
 - **`ENABLE_KB_EXEC: "true"`**: abilita un tool filesystem (`ls`, `cat`, `grep`, `find`, `head`, `tail`, `sed`) che i modelli AI possono usare per navigare e cercare nelle knowledge base. Attivato nel compose.
 - **Knowledge base folders**: i file nelle KB ora si organizzano in sottocartelle con breadcrumb navigation — utile per collection con molti documenti.
-- **Incremental sync con checksum**: alternativa alla deduplicazione SQL (`already_in_collection()`). Il sync nativo evita re-upload di file invariati senza query dirette al DB.
+- **Incremental sync con checksum**: alternativa allo script di import manuale. Il sync nativo evita re-upload di file invariati.
 - **`oikb`**: tool companion ufficiale per sync da directory locale, GitHub, S3, Confluence e 40+ sorgenti. Alternativa futura agli script Python per l'ingestion.
 
 ### Regole critiche del pipeline RAG
@@ -100,7 +100,7 @@ Il modello embedding **non** viene scaricato da open-webui a runtime (lo fa in m
 - **RAG-only**: il system prompt vieta espressamente di rispondere senza fonte documentale. Mai rimuovere o aggirare questo vincolo.
 - **Hybrid search** (BM25 + vettori) è abilitato per default — non disabilitare senza motivo esplicito.
 - **Reranker disabilitato** per default (troppo lento senza GPU dedicata) — abilitare solo con hardware adeguato.
-- **Idempotenza import**: `already_in_collection()` va sempre verificato prima di re-importare un file per evitare duplicati vettoriali.
+- **Idempotenza import**: gli script `import-pdfs-*.py` si appoggiano al **dedup nativo per contenuto** di OpenWebUI (risposta 400 "Duplicate content detected" → SKIP). Nessuna query SQL diretta né `docker exec`: tutto via API. ⚠️ La v0.9.6 ha cambiato lo schema (knowledge base folders): l'endpoint `/api/v1/knowledge/{id}` non espone più i file come array piatto (`files: null`), quindi il dedup per-filename non è affidabile — si usa quello per-contenuto del server.
 - **Chunking**: modificare `CHUNK_SIZE` e `CHUNK_OVERLAP` con cautela — impattano la qualità del retrieval su tutti i documenti.
 
 ### Collections e accesso
