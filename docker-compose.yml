@@ -72,8 +72,8 @@ services:
     depends_on:
       open-webui:
         condition: service_healthy
-      pgadmin:
-        condition: service_started
+      # pgadmin NON è una dipendenza: è solo l'admin su /pgadmin. Se è giù, il sito RAG resta su
+      # (la rotta /pgadmin darà 502 finché pgadmin non parte, ma open-webui resta raggiungibile).
     networks:
       - frontend
     logging:
@@ -85,6 +85,13 @@ services:
     image: ghcr.io/open-webui/open-webui:0.9.6  # verifica ultima stabile → https://github.com/open-webui/open-webui/releases
     container_name: open-webui
     restart: unless-stopped
+    # Rimuove il suffisso " (Open WebUI)" che env.py aggiunge a ogni WEBUI_NAME custom, poi avvia normalmente.
+    # Self-healing: si ri-applica a ogni avvio; se un update cambia la riga, "|| true" evita il crash (il suffisso ricompare).
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        sed -i "s/if WEBUI_NAME != 'Open WebUI':/if False:/" /app/backend/open_webui/env.py || true
+        exec bash start.sh
     depends_on:
       postgres:
         condition: service_healthy
@@ -146,6 +153,7 @@ services:
       # ---------- Sicurezza ----------
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?genera una chiave random lunga}
       WEBUI_AUTH: "true"
+      WEBUI_NAME: "Futura Rag"    # nome mostrato al posto di "Open WebUI" (branding)
       ENABLE_PERSISTENT_CONFIG: "False"
       BYPASS_MODEL_ACCESS_CONTROL: "True"
 
@@ -192,6 +200,16 @@ services:
       - openwebui_data:/app/backend/data
       - hf_cache:/root/.cache/huggingface         # cache modelli HF condivisa fra restart
       - embedding_model:/models/e5-base:ro        # modello embedding pre-scaricato da model-init
+      # --- BRANDING (vedi branding/LEGGIMI.md) - path reali verificati su Open WebUI v0.9.6 ---
+      - ./branding/favicon.png:/app/build/favicon.png:ro
+      - ./branding/favicon.png:/app/build/static/favicon.png:ro
+      - ./branding/favicon.png:/app/build/static/logo.png:ro
+      - ./branding/splash.png:/app/build/static/splash.png:ro
+      - ./branding/splash.png:/app/build/static/splash-dark.png:ro
+      - ./branding/favicon.png:/app/backend/open_webui/static/favicon.png:ro
+      - ./branding/favicon.png:/app/backend/open_webui/static/logo.png:ro
+      - ./branding/splash.png:/app/backend/open_webui/static/splash.png:ro
+      - ./branding/splash.png:/app/backend/open_webui/static/splash-dark.png:ro
     networks:
       - frontend
       - backend

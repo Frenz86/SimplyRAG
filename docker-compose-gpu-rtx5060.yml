@@ -44,8 +44,7 @@ services:
     depends_on:
       open-webui:
         condition: service_healthy
-      pgadmin:
-        condition: service_started
+      # pgadmin NON è una dipendenza: se è giù, il sito RAG resta su (solo /pgadmin darà 502)
     networks:
       - frontend
     logging:
