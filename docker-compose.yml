@@ -23,15 +23,12 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Scarica UNA SOLA VOLTA il modello embedding in formato snello (solo safetensors,
-  # niente pytorch.bin/onnx/openvino). open-webui lo carica da cartella locale e non riscarica nulla.
+  # Scarica UNA SOLA VOLTA i soli file necessari del modello embedding via URL diretti HuggingFace
+  # (solo safetensors + tokenizer + config, niente pytorch.bin/onnx/openvino). open-webui lo carica
+  # da cartella locale e non riscarica nulla. urllib segue il redirect al CDN: niente client Xet, niente pip.
   model-init:
     image: python:3.11-slim
     container_name: model-init
-    environment:
-      HF_HUB_DISABLE_XET: "true"      # il backend Xet stalla su Docker Desktop
-      HF_HUB_ENABLE_HF_TRANSFER: "0"
-      HF_TOKEN: ${HF_TOKEN:-}
     volumes:
       - embedding_model:/models/e5-base
     entrypoint: ["/bin/sh", "-c"]
@@ -42,9 +39,13 @@ services:
           echo "Modello embedding gia presente, skip download."
           exit 0
         fi
-        pip install -q huggingface_hub
-        python -c "from huggingface_hub import snapshot_download; snapshot_download('intfloat/multilingual-e5-base', local_dir='/models/e5-base', allow_patterns=['config.json','config_sentence_transformers.json','modules.json','sentence_bert_config.json','tokenizer.json','tokenizer_config.json','special_tokens_map.json','sentencepiece.bpe.model','1_Pooling/*','model.safetensors'])"
-        echo "Modello embedding e5-base pronto (solo safetensors)."
+        python -c "
+        import urllib.request, os
+        base='https://huggingface.co/intfloat/multilingual-e5-base/resolve/main'
+        files=['config.json','config_sentence_transformers.json','modules.json','sentence_bert_config.json','tokenizer.json','tokenizer_config.json','special_tokens_map.json','sentencepiece.bpe.model','1_Pooling/config.json','model.safetensors']
+        for f in files: d='/models/e5-base/'+f; os.makedirs(os.path.dirname(d), exist_ok=True); print('scarico', f, flush=True); urllib.request.urlretrieve(base+'/'+f, d)
+        print('Modello embedding e5-base pronto (solo safetensors, via URL diretti).')
+        "
     restart: "no"
     networks:
       - backend
