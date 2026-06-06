@@ -5,10 +5,9 @@ docker compose up -d
 # http://localhost  → crea il primo utente (sarà admin)
 
 
-
-
-
 python utils/filter-models.py
+
+python import-pdfs-pubbliche.py
 
 #############################################################
 docker run --rm --gpus all --ulimit memlock=-1 --cap-add=IPC_LOCK \

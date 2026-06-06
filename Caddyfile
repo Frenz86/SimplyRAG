@@ -7,6 +7,9 @@
 		X-Frame-Options SAMEORIGIN
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
+		# CSP tarata per OpenWebUI (SvelteKit): unsafe-inline/eval e worker da blob: sono necessari alla UI.
+		# HSTS volutamente assente: il proxy serve su HTTP porta 80, non HTTPS.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' ws: wss:; worker-src 'self' blob:; media-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'"
 		-Server
 	}
 
