@@ -42,7 +42,7 @@ services:
         python -c "
         import urllib.request, os
         base='https://huggingface.co/intfloat/multilingual-e5-base/resolve/main'
-        files=['config.json','config_sentence_transformers.json','modules.json','sentence_bert_config.json','tokenizer.json','tokenizer_config.json','special_tokens_map.json','sentencepiece.bpe.model','1_Pooling/config.json','model.safetensors']
+        files=['config.json','modules.json','sentence_bert_config.json','tokenizer.json','tokenizer_config.json','special_tokens_map.json','sentencepiece.bpe.model','1_Pooling/config.json','model.safetensors']
         for f in files: d='/models/e5-base/'+f; os.makedirs(os.path.dirname(d), exist_ok=True); print('scarico', f, flush=True); urllib.request.urlretrieve(base+'/'+f, d)
         print('Modello embedding e5-base pronto (solo safetensors, via URL diretti).')
         "

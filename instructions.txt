@@ -4,6 +4,9 @@ docker compose up -d
 # 2) Apri OpenWebUI
 # http://localhost  → crea il primo utente (sarà admin)
 
+apri la powershell da vscode:
+
+
 
 python utils/filter-models.py
 

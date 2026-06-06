@@ -55,7 +55,7 @@ SimplyRAG è una soluzione **RAG documentale containerizzata**, progettata per u
 | Frontend + API RAG | **Open WebUI** v0.9.6 | Porta 8080 interna, esposta via Caddy |
 | Vector DB | **PostgreSQL 16 + pgvector** | Porta 5432, volume persistente `pgdata` |
 | DB Admin | **pgAdmin** v8.14 | Accessibile via `/pgadmin` |
-| Reverse proxy | **Caddy** | Porta 80, gestisce security headers e routing |
+| Reverse proxy | **Caddy** | Porta 80, security headers (CSP) e routing |
 | Embedding | **intfloat/multilingual-e5-base** | Pre-scaricato dal servizio `model-init` in `/models/e5-base` (~1.1GB, solo safetensors) |
 | LLM remoto | **Gemini 2.5 Flash** via OpenRouter | API key in `.env` |
 | LLM locale | **llama.cpp** (GGUF, opzionale) | Porta 8081 host, accessibile via `host.docker.internal` |
