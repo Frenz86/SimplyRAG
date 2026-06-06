@@ -55,7 +55,7 @@ services:
         max-file: "3"
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui:0.9.5
+    image: ghcr.io/open-webui/open-webui:0.9.6
     container_name: open-webui
     restart: unless-stopped
     depends_on:
@@ -63,6 +63,8 @@ services:
         condition: service_healthy
       llama-cpp:
         condition: service_healthy
+      model-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: 30s
@@ -75,7 +77,9 @@ services:
       PGVECTOR_DB_URL: postgresql://owui:${POSTGRES_PASSWORD}@postgres:5432/openwebui
       CONTENT_EXTRACTION_ENGINE: ""
       RAG_EMBEDDING_ENGINE: ""
-      RAG_EMBEDDING_MODEL: "intfloat/multilingual-e5-base"
+      RAG_EMBEDDING_MODEL: "/models/e5-base"                  # cartella locale pre-popolata da model-init: nessun download a runtime
+      RAG_EMBEDDING_MODEL_AUTO_UPDATE: "false"
+      HF_HUB_DISABLE_XET: "true"                             # il backend Xet stalla su Docker Desktop
       RAG_EMBEDDING_BATCH_SIZE: "8"
       RAG_EMBEDDING_QUERY_PREFIX: "query: "
       RAG_EMBEDDING_CONTENT_PREFIX: "passage: "
@@ -130,6 +134,7 @@ services:
     volumes:
       - openwebui_data:/app/backend/data
       - hf_cache:/root/.cache/huggingface
+      - embedding_model:/models/e5-base:ro        # modello embedding pre-scaricato da model-init
     networks:
       - frontend
       - backend
@@ -200,6 +205,36 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Scarica UNA SOLA VOLTA il modello embedding snello (solo safetensors) in /models/e5-base.
+  model-init:
+    image: python:3.11-slim
+    container_name: model-init
+    environment:
+      HF_HUB_DISABLE_XET: "true"
+      HF_HUB_ENABLE_HF_TRANSFER: "0"
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - embedding_model:/models/e5-base
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        if [ -f /models/e5-base/model.safetensors ]; then
+          echo "Modello embedding gia presente, skip download."
+          exit 0
+        fi
+        pip install -q huggingface_hub
+        python -c "from huggingface_hub import snapshot_download; snapshot_download('intfloat/multilingual-e5-base', local_dir='/models/e5-base', allow_patterns=['config.json','config_sentence_transformers.json','modules.json','sentence_bert_config.json','tokenizer.json','tokenizer_config.json','special_tokens_map.json','sentencepiece.bpe.model','1_Pooling/*','model.safetensors'])"
+        echo "Modello embedding e5-base pronto (solo safetensors)."
+    restart: "no"
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   pgadmin:
     image: dpage/pgadmin4:8.14
     container_name: pgadmin
@@ -236,3 +271,4 @@ volumes:
   pgadmin_data:
   caddy_data:
   models:
+  embedding_model:

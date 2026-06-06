@@ -13,8 +13,8 @@ token = requests.post(f"{BASE}/api/v1/auths/signin", json={"email": EMAIL, "pass
 headers = {"Authorization": f"Bearer {token}"}
 
 KEEP = {
-    "google/gemini-2.5-flash-lite",
-    "google/gemini-2.5-flash",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.1-flash-lite",
 }
 
 # Prendi tutti i modelli disponibili da Open WebUI
