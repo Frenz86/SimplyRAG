@@ -232,28 +232,28 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  pgadmin:
-    image: dpage/pgadmin4:8.14
-    container_name: pgadmin
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?serve PGADMIN_EMAIL in .env}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?serve PGADMIN_PASSWORD in .env}
-      SCRIPT_NAME: /pgadmin
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
-    networks:
-      - frontend
-      - backend
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+  # pgadmin:
+  #   image: dpage/pgadmin4:8.14
+  #   container_name: pgadmin
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:?serve PGADMIN_EMAIL in .env}
+  #     PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?serve PGADMIN_PASSWORD in .env}
+  #     SCRIPT_NAME: /pgadmin
+  #   volumes:
+  #     - pgadmin_data:/var/lib/pgadmin
+  #     - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+  #   networks:
+  #     - frontend
+  #     - backend
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
 
 networks:
   frontend:
@@ -265,6 +265,6 @@ volumes:
   pgdata:
   openwebui_data:
   hf_cache:
-  pgadmin_data:
+#  pgadmin_data:
   caddy_data:
   embedding_model:
