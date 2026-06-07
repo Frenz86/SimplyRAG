@@ -1,5 +1,7 @@
 {
 	admin off
+	# rate_limit è un plugin: va dichiarato nell'ordine delle direttive.
+	order rate_limit before reverse_proxy
 }
 
 :80 {
@@ -11,6 +13,24 @@
 		# HSTS volutamente assente: il proxy serve su HTTP porta 80, non HTTPS.
 		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' ws: wss:; worker-src 'self' blob:; media-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'"
 		-Server
+	}
+
+	# Rate limiting per IP. Endpoint auth più stretti (anti brute-force),
+	# il resto del traffico con un tetto largo per non disturbare l'uso normale.
+	rate_limit {
+		zone auth {
+			match {
+				path /api/v1/auths/signin /api/v1/auths/signup
+			}
+			key {remote_host}
+			events 10
+			window 1m
+		}
+		zone general {
+			key {remote_host}
+			events 240
+			window 1m
+		}
 	}
 
 	handle /pgadmin* {

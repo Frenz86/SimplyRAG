@@ -56,7 +56,11 @@ services:
         max-file: "3"
 
   caddy:
-    image: caddy:alpine
+    # Immagine custom: Caddy + plugin rate-limit (vedi Dockerfile.caddy).
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: simplyrag-caddy:latest
     container_name: caddy
     restart: unless-stopped
     ports:

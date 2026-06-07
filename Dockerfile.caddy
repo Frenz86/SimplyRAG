@@ -1,0 +1,9 @@
+# Build stage: compila Caddy con il plugin rate-limit (mholt/caddy-ratelimit).
+# Il binario caddy:alpine standard non include rate_limit, va ricompilato con xcaddy.
+FROM caddy:2-builder-alpine AS builder
+RUN xcaddy build \
+    --with github.com/mholt/caddy-ratelimit
+
+# Production stage: solo il binario custom sopra l'immagine runtime ufficiale.
+FROM caddy:2-alpine
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
