@@ -5,12 +5,20 @@ docker compose up -d
 # http://localhost  → crea il primo utente (sarà admin)
 
 
-python utils/filter-models.py
+python tools/filter-models.py
 
-python import-pdfs-pubbliche.py
+python tools/import_pdfs.py --scope public            # importa tutto
+python tools/import_pdfs.py --scope public --collections amministrazione   # solo 1 (test mirato)
+
+
+####locust  (lanciare da root: --env-file punta al .env del progetto)
+docker compose --env-file .env -f locust/docker-compose.locust.yml up --build
+
+# poi apri http://localhost:8089 e fai salire gli utenti
+
 
 ###delete 
-python cleanup-collections.py
+python tools/cleanup-collections.py
 
 2
 

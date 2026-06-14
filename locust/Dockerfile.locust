@@ -1,0 +1,9 @@
+# Build di Locust sopra python:3.11-slim (già in locale): evita di scaricare
+# l'immagine ufficiale locustio/locust, i cui blob falliscono sul CDN di Docker.
+FROM python:3.11-slim
+
+RUN pip install --no-cache-dir "locust>=2.32,<3"
+
+WORKDIR /mnt/locust
+EXPOSE 8089
+ENTRYPOINT ["locust"]

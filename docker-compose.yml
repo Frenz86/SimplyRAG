@@ -115,6 +115,12 @@ services:
       # ---------- Vector DB ----------
       VECTOR_DB: pgvector
       PGVECTOR_DB_URL: postgresql://owui:${POSTGRES_PASSWORD}@postgres:5432/openwebui
+      # Lunghezza vettore DICHIARATA a pgvector: deve combaciare con la dim dell'embedding
+      # (e5-base = 768) E con document_chunk.vector. OWUI non la deduce dal modello:
+      # legge PGVECTOR_INITIALIZE_MAX_VECTOR_LENGTH (default 1536). Se non impostata ->
+      # check_vector_length solleva "VECTOR_LENGTH 1536 does not match ... 768" -> crash-loop.
+      # (Registro Self-Annealing §6, 2026-06-14: stesso classe di errore, direzione inversa.)
+      PGVECTOR_INITIALIZE_MAX_VECTOR_LENGTH: "768"
 
       # ---------- Content extraction: built-in ----------
       CONTENT_EXTRACTION_ENGINE: ""
@@ -140,6 +146,11 @@ services:
       CHUNK_SIZE: "1500"
       CHUNK_OVERLAP: "200"
       RAG_TEXT_SPLITTER: "token"
+      # Page-preserving (SOP import, invariante I4): prima splitta sugli header markdown,
+      # così ogni "# Pagina N" (iniettato da tools/build_page_content.py) delimita un chunk
+      # che sta in UNA sola pagina. strip_headers=False di default -> l'header resta nel testo
+      # del chunk -> il LLM lo vede in [context] e puo' citare la pagina. vedi SOP.md §4.
+      ENABLE_MARKDOWN_HEADER_TEXT_SPLITTER: "true"
 
       # ---------- LLM: llama.cpp locale + OpenRouter ----------
       ENABLE_OPENAI_API: "true"

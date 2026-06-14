@@ -1,0 +1,35 @@
+# Esegue Locust DENTRO la rete Docker di SimplyRAG, puntando direttamente a open-webui:8080.
+# Così si bypassa Caddy (e il suo rate limit per-IP) e si misura la capacità reale dell'app.
+#
+# Prerequisito: lo stack principale è già su (docker compose up -d), che crea la rete simplyrag_frontend.
+#
+# Avvio:  docker compose -f docker-compose.locust.yml up --build
+# UI:     http://localhost:8089   (host già pre-impostato su open-webui:8080)
+services:
+  locust:
+    # Build locale sopra python:3.11-slim: l'immagine ufficiale locustio/locust
+    # non scende (blob in errore sul CDN di Docker). Vedi Dockerfile.locust.
+    build:
+      context: .
+      dockerfile: Dockerfile.locust
+    image: simplyrag-locust:latest
+    container_name: locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py:ro
+    environment:
+      OWUI_EMAIL: ${OWUI_EMAIL:?serve OWUI_EMAIL in .env}
+      OWUI_PASSWORD: ${OWUI_PASSWORD:?serve OWUI_PASSWORD in .env}
+      LOAD_TEST_MODEL: ${LOAD_TEST_MODEL:-google/gemini-2.5-flash-lite}
+      LOAD_TEST_KB: ${LOAD_TEST_KB:-}
+    command: >-
+      -f /mnt/locust/locustfile.py
+      --host http://open-webui:8080
+    networks:
+      - frontend
+
+networks:
+  frontend:
+    external: true
+    name: simplyrag_frontend
